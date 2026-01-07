@@ -1,4 +1,7 @@
-# Marid
+<p align="center">
+  <img alt="Project Banner" src="assets/images/Banner.png" width="95%" height="auto"/></br>
+</p>
+
 
 Marid is an MLIR-based static analysis and pass framework for reasoning about
 memory allocation and boundedness properties of programs.
