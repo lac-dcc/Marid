@@ -2,6 +2,7 @@ add_library(Marid STATIC
   Analysis/ConstantBoundednessAnalysis.cpp
   Passes/CheckConstantBoundednessPass.cpp
   Passes/LoopExpansionPass.cpp
+  Passes/TreeificationPass.cpp
 )
 
 # Public headers live in include/
