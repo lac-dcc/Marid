@@ -20,6 +20,7 @@ mkdir build
 cd build
 cmake ..
 make
+```
 
 ## Pipeline Overview
 
