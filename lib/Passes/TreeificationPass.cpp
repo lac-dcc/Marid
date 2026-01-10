@@ -13,64 +13,60 @@ using namespace mlir;
 
 namespace marid {
 
-/// Treeifies a single scf.if operation.
-/// We duplicate the 'continuation' (all logic following the scf.if in its 
-/// current block) into both the then and else paths to eliminate join points.
+/// Clones a specific branch region and the shared continuation logic into a
+/// new block. This is the core "duplication" step that converts the DAG
+/// structure into a Tree.
+static void clonePath(scf::IfOp ifOp, Region &branchRegion, 
+                      Block *continuationBlock, Block *destBlock, 
+                      RewriterBase &rewriter) {
+  rewriter.setInsertionPointToStart(destBlock);
+  IRMapping mapper;
+
+  // 1. Clone branch-specific logic (then { ... } or else { ... })
+  for (auto &op : branchRegion.front()) {
+    if (auto yieldOp = dyn_cast<scf::YieldOp>(op)) {
+      // Map the scf.if results to the values produced in this specific path.
+      for (auto [ifRes, yieldVal] :
+          llvm::zip(ifOp.getResults(), yieldOp.getOperands())) {
+        mapper.map(ifRes, mapper.lookupOrDefault(yieldVal));
+      }
+      // scf.yield is not cloned into the CFG
+      continue;
+    }
+    rewriter.clone(op, mapper);
+  }
+
+  // 2. Clone the continuation logic (everything that was after the scf.if)
+  for (auto &op : *continuationBlock) {
+    rewriter.clone(op, mapper);
+  }
+}
+
+/// Orchestrates the treeification of a single scf.if operation.
 static LogicalResult treeifyIf(scf::IfOp ifOp, RewriterBase &rewriter) {
   Block *currentBlock = ifOp->getBlock();
   Location loc = ifOp.getLoc();
 
-  // 1. Isolate the continuation logic. 
-  // We split the block immediately after the scf.if. The new continuationBlock
-  // contains all the original users of the scf.if results.
-  Block *continuationBlock = rewriter.splitBlock(currentBlock, ++Block::iterator(ifOp));
+  // 1. Isolate the "tail" of the current block.
+  Block *continuationBlock =
+    rewriter.splitBlock(currentBlock, ++Block::iterator(ifOp));
 
-  // 2. Create target blocks in the function region.
-  // This logic assumes we are treeifying from the top-down, so the parent
-  // of the current block is the function's region.
+  // 2. Prepare new blocks for the divergent paths.
   Region *parentRegion = currentBlock->getParent();
   Block *thenBlock = rewriter.createBlock(parentRegion);
   Block *elseBlock = rewriter.createBlock(parentRegion);
 
-  // Helper to build a leaf of the tree.
-  auto buildPath = [&](Region &srcRegion, Block *destBlock) {
-    rewriter.setInsertionPointToStart(destBlock);
-    IRMapping mapper;
+  // 3. Duplicate logic into each path.
+  clonePath(ifOp, ifOp.getThenRegion(), continuationBlock, thenBlock, rewriter);
+  clonePath(ifOp, ifOp.getElseRegion(), continuationBlock, elseBlock, rewriter);
 
-    // A. Clone the operations from the scf.if branch.
-    // scf.if regions are guaranteed by the dialect to have a single block.
-    for (auto &op : srcRegion.front()) {
-      if (auto yieldOp = dyn_cast<scf::YieldOp>(op)) {
-        // Map scf.if results to the specific values produced in this branch.
-        for (auto it : llvm::zip(ifOp.getResults(), yieldOp.getOperands())) {
-          mapper.map(std::get<0>(it), mapper.lookupOrDefault(std::get<1>(it)));
-        }
-        continue; 
-      }
-      rewriter.clone(op, mapper);
-    }
-
-    // B. Clone the continuation logic into this branch.
-    // This creates the "Tree" shape by duplicating the tail logic.
-    for (auto &op : *continuationBlock) {
-      rewriter.clone(op, mapper);
-    }
-  };
-
-  // 3. Populate both paths.
-  buildPath(ifOp.getThenRegion(), thenBlock);
-  buildPath(ifOp.getElseRegion(), elseBlock);
-
-  // 4. Transform the original block into a conditional branch.
+  // 4. Replace the scf.if with a conditional branch in the original block.
   rewriter.setInsertionPoint(ifOp);
   cf::CondBranchOp::create(rewriter, loc, ifOp.getCondition(), 
                            thenBlock, ValueRange{}, 
                            elseBlock, ValueRange{});
 
-  // 5. Cleanup.
-  // CRITICAL: We erase the continuation block BEFORE the scf.if.
-  // This removes the original users of the scf.if results, allowing the 
-  // scf.if to be erased without triggering "op has uses" assertions.
+  // 5. Cleanup: Remove the shared tail and the original operation.
   rewriter.eraseBlock(continuationBlock);
   rewriter.eraseOp(ifOp);
 
@@ -90,15 +86,13 @@ struct TreeificationPass
       bool changed = true;
       while (changed) {
         changed = false;
-        
-        // We use a restarted walk to avoid invalid/stale pointers.
-        // We only process scf.if ops that are direct children of the function
-        // (not nested inside another scf.if). This ensures top-down processing.
+        // Search for top-level scf.if operations to process them root-to-leaf.
         func.walk<WalkOrder::PreOrder>([&](scf::IfOp ifOp) {
           if (isa<func::FuncOp>(ifOp->getParentOp())) {
             if (succeeded(treeifyIf(ifOp, rewriter))) {
               changed = true;
-              return WalkResult::interrupt(); // Restart search for new top-level ops
+              // Restart to find newly promoted inner ifs
+              return WalkResult::interrupt(); 
             }
           }
           return WalkResult::advance();
@@ -109,7 +103,7 @@ struct TreeificationPass
 
   StringRef getArgument() const override { return "marid-treeify"; }
   StringRef getDescription() const override {
-    return "Transforms structured control flow into a tree-shaped CFG via iterative duplication.";
+    return "Transforms a DAG of structured control flow into a Tree-shaped CFG.";
   }
 
   void getDependentDialects(DialectRegistry &registry) const override {
