@@ -25,6 +25,20 @@ cmake ..
 make
 ````
 
+---
+
+## Usage
+
+```bash
+./bin/marid-opt program.mlir
+```
+
+The tool prints:
+
+* diagnostics from the boundedness checker,
+* the memory allocation report,
+* followed by the (unchanged) transformed MLIR module.
+
 ## Pipeline Overview
 
 Marid implements an MLIR-based transformation pipeline that converts structured
@@ -195,19 +209,3 @@ After running the full Marid pipeline, the resulting MLIR module satisfies:
 2. **No Join Points**: Each block has at most one predecessor.
 3. **Path Isolation**: Each `return` corresponds to one execution trace.
 4. **Static Memory Layout**: All values have fixed, statically known locations.
-
----
-
-## Usage
-
-```bash
-./bin/marid-opt program.mlir
-```
-
-The tool prints:
-
-* diagnostics from the boundedness checker,
-* the memory allocation report,
-* followed by the (unchanged) transformed MLIR module.
-
-```
