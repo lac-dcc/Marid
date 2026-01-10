@@ -43,7 +43,7 @@ Before transformation, Marid ensures the program is "Constant-Bounded." This mea
 * No `scf.while` loops (as termination depends on runtime data).
 * `scf.for` loops must have `constant` lower bounds, upper bounds, and steps.
 
-### Pseudo-code
+**Pseudo-code:**
 
 ```python
 def check_constant_boundedness(module):
@@ -66,7 +66,7 @@ def check_constant_boundedness(module):
 
 Once verified, Marid unrolls all `scf.for` loops. Because the bounds are constants, the loop is completely replaced by  copies of its body, where  is the trip count.
 
-### Pseudo-code
+**Pseudo-code:**
 
 ```python
 def expand_loops(module):
@@ -91,34 +91,42 @@ def expand_loops(module):
 
 The final stage converts a Directed Acyclic Graph (DAG) of conditionals into a strict Tree. It eliminates **Join Points** (blocks where control flow merges) by duplicating the "continuation" logic (the code following the branch) into both the `then` and `else` paths.
 
-### Pseudo-code
+**Pseudo-code:**
 
 ```python
 def treeify_module(func):
-    while func.has_scf_if():
-        # Process top-level conditionals first
-        if_op = func.get_next_top_level_if()
+    # Repeat until no structured conditionals remain
+    while func.contains(scf.if):
+        # Always pick an 'if' that is a direct child of the function (Top-Down)
+        # This ensures we expand the tree from the root to the leaves.
+        if_op = func.get_top_level_if()
         
-        # 1. Split the block after the 'if' to isolate the 'tail' logic
-        continuation_block = split_block_after(if_op)
+        # 1. Isolate the 'tail' (continuation) logic
+        # Everything after if_op in the current block is moved to a temp block
+        tail_block = split_block_after(if_op)
         
-        # 2. Create two fresh paths
-        then_block = create_block()
-        else_block = create_block()
+        # 2. Create fresh CFG blocks for the 'then' and 'else' paths
+        then_path = func.add_block()
+        else_path = func.add_block()
         
-        # 3. Populate each path
-        for path in [then, else]:
-            clone_branch_logic(if_op.region(path))
-            # DUPLICATION: Every path gets its own copy of the tail
-            clone_logic(continuation_block)
+        # 3. Populate each path (The Duplication Step)
+        for branch in [if_op.then_region, if_op.else_region]:
+            dest = then_path if branch is then_region else else_path
             
-        # 4. Replace scf.if with a low-level conditional branch
-        replace_op_with_cond_br(if_op, then_block, else_block)
+            # A. Clone branch-specific logic
+            clone_ops(branch, dest)
+            
+            # B. Clone the tail (continuation)
+            # If the tail contained nested 'if' ops, they are now cloned here.
+            # They will be processed in the next iteration of the 'while' loop.
+            clone_ops(tail_block, dest)
+            
+        # 4. Replace the structured 'if' with a primitive conditional branch
+        replace_cond_br(if_op, target_true=then_path, target_false=else_path)
         
         # 5. Cleanup
-        erase(continuation_block)
-        erase(if_op)
-
+        tail_block.erase()
+        if_op.erase()
 ```
 
 ---
