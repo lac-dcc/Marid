@@ -6,6 +6,7 @@
 #include "marid/Passes/CheckConstantBoundednessPass.h"
 #include "marid/Analysis/ConstantBoundednessAnalysis.h"
 #include "marid/Passes/LoopExpansionPass.h"
+#include "marid/Passes/TreeificationPass.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -69,6 +70,7 @@ int main(int argc, char **argv) {
   // Run ConstantBoundednessAnalysis
   mlir::PassManager pm(&context);
   pm.addPass(marid::createLoopExpansionPass());
+  pm.addPass(marid::createTreeificationPass());
   pm.addPass(marid::createCheckConstantBoundednessPass());
 
   if (failed(pm.run(*module)))
