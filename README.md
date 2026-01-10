@@ -2,13 +2,16 @@
   <img alt="Project Banner" src="assets/images/Banner.png" width="95%" height="auto"/></br>
 </p>
 
-
-Marid is an MLIR-based static analysis and pass framework for reasoning about
-memory allocation and boundedness properties of programs.
+Marid is an MLIR-based static analysis and transformation framework for reasoning
+about **boundedness**, **control flow structure**, and **memory allocation**
+in programs with statically predictable behavior.
 
 ## Features
 
 - Constant-boundedness analysis for SCF-based MLIR programs
+- Loop expansion for statically bounded iteration spaces
+- Treeification of structured control flow into a tree-shaped CFG
+- Simple stack-based memory allocation for constant-bounded programs
 - MLIR Analysis Framework integration
 - Checker pass with diagnostic support
 - Standalone driver tool (`marid-opt`)
@@ -20,109 +23,124 @@ mkdir build
 cd build
 cmake ..
 make
-```
+````
 
 ## Pipeline Overview
 
-Marid is an MLIR-based transformation pipeline that converts structured programs into a **Tree-shaped Control Flow Graph (CFG)**. By expanding all loops and duplication-based treeification of conditionals, Marid ensures that every unique execution path in a function is represented by its own linear sequence of basic blocks ending in a unique return statement.
+Marid implements an MLIR-based transformation pipeline that converts structured
+programs into a **Tree-shaped Control Flow Graph (CFG)** and then performs
+a **simple, deterministic memory allocation** over the resulting program.
 
-The transformation follows a three-stage process:
+By expanding all loops and duplicating control-flow continuations,
+Marid ensures that every possible execution path is represented by its own
+linear sequence of basic blocks ending in a unique `return` statement.
+
+The transformation follows a four-stage process:
 
 1. **Analysis**: Verify that the program has finite, predictable complexity.
-2. **Expansion**: Flatten all loops into sequences of conditional logic.
-3. **Treeification**: Duplicates code following branches to eliminate join points in the CFG.
+2. **Expansion**: Flatten all loops into sequences of straight-line code.
+3. **Treeification**: Eliminate join points by duplicating control flow.
+4. **Memory Allocation**: Assign fixed stack locations to all values and buffers.
 
 ---
 
 ## 1. Constant Boundedness Analysis
 
-Before transformation, Marid ensures the program is "Constant-Bounded." This means the execution time and path count are statically determinable.
+Before any transformation, Marid verifies that the program is **constant-bounded**.
+Intuitively, this means that both execution time and the number of execution paths
+are statically known.
 
-**Rules:**
+### Rules
 
-* No `scf.while` loops (as termination depends on runtime data).
-* `scf.for` loops must have `constant` lower bounds, upper bounds, and steps.
+* No `scf.while` loops (termination depends on runtime data).
+* `scf.for` loops must have:
 
-**Pseudo-code:**
+  * constant lower bounds,
+  * constant upper bounds,
+  * constant step sizes.
+
+### Pseudo-code
 
 ```python
 def check_constant_boundedness(module):
     for op in module:
         if op is scf.while:
-            return False # Non-deterministic termination
+            return False  # Non-deterministic termination
         
         if op is scf.for:
             if not (is_constant(op.lb) and 
                     is_constant(op.ub) and 
                     is_constant(op.step)):
-                return False # Trip count must be known at compile time
+                return False  # Trip count must be known at compile time
     return True
-
 ```
 
 ---
 
 ## 2. Loop Expansion
 
-Once verified, Marid unrolls all `scf.for` loops. Because the bounds are constants, the loop is completely replaced by  copies of its body, where  is the trip count.
+Once a program is proven constant-bounded, Marid expands all `scf.for` loops.
+Because loop bounds are constant, each loop can be fully unrolled at compile time.
 
-**Pseudo-code:**
+The loop body is cloned once per iteration, with the induction variable replaced
+by the corresponding constant value.
+
+### Pseudo-code
 
 ```python
 def expand_loops(module):
-    # Process innermost loops first to handle nested expansion
+    # Process innermost loops first to handle nesting
     for for_op in module.walk_post_order(scf.for):
         trip_count = (for_op.ub - for_op.lb) / for_op.step
         
         for i in range(trip_count):
             iv_value = for_op.lb + (i * for_op.step)
-            # Map the loop induction variable to the constant value
             mapping = {for_op.induction_var: iv_value}
-            # Clone the entire body into the parent block
             clone_body(for_op.body, mapping)
         
         for_op.erase()
-
 ```
 
 ---
 
 ## 3. Treeification
 
-The final stage converts a Directed Acyclic Graph (DAG) of conditionals into a strict Tree. It eliminates **Join Points** (blocks where control flow merges) by duplicating the "continuation" logic (the code following the branch) into both the `then` and `else` paths.
+After loop expansion, the program may still contain structured conditionals
+(`scf.if`) whose control flow *joins* after the branch.
+This results in a **Directed Acyclic Graph (DAG)**.
 
-**Pseudo-code:**
+Treeification transforms this DAG into a **strict tree** by eliminating join points.
+It does so by **duplicating the continuation logic** (the code following a branch)
+into each branch path.
+
+After this transformation:
+
+* The CFG has no join points.
+* Every basic block (except the entry block) has exactly one predecessor.
+* Every `return` corresponds to a unique execution path.
+
+### Pseudo-code
 
 ```python
 def treeify_module(func):
-    # Repeat until no structured conditionals remain
     while func.contains(scf.if):
-        # Always pick an 'if' that is a direct child of the function (Top-Down)
-        # This ensures we expand the tree from the root to the leaves.
         if_op = func.get_top_level_if()
         
-        # 1. Isolate the 'tail' (continuation) logic
-        # Everything after if_op in the current block is moved to a temp block
+        # 1. Isolate the continuation logic
         tail_block = split_block_after(if_op)
         
-        # 2. Create fresh CFG blocks for the 'then' and 'else' paths
+        # 2. Create fresh CFG blocks
         then_path = func.add_block()
         else_path = func.add_block()
         
-        # 3. Populate each path (The Duplication Step)
+        # 3. Duplicate logic into each path
         for branch in [if_op.then_region, if_op.else_region]:
             dest = then_path if branch is then_region else else_path
-            
-            # A. Clone branch-specific logic
             clone_ops(branch, dest)
-            
-            # B. Clone the tail (continuation)
-            # If the tail contained nested 'if' ops, they are now cloned here.
-            # They will be processed in the next iteration of the 'while' loop.
             clone_ops(tail_block, dest)
-            
-        # 4. Replace the structured 'if' with a primitive conditional branch
-        replace_cond_br(if_op, target_true=then_path, target_false=else_path)
+        
+        # 4. Replace structured control flow
+        replace_cond_br(if_op, then_path, else_path)
         
         # 5. Cleanup
         tail_block.erase()
@@ -131,17 +149,65 @@ def treeify_module(func):
 
 ---
 
-## CFG Properties
+## 4. Simple Memory Allocation
 
-After running the Marid pipeline, the resulting MLIR module satisfies the following properties:
+Once the CFG has been fully treeified, the program consists solely of
+straight-line execution paths with no loops and no join points.
+This makes memory allocation straightforward.
 
-1. **No Loops**: The CFG is a Directed Acyclic Graph.
-2. **No Join Points**: Every block (except the entry block) has exactly one predecessor.
-3. **Path Isolation**: Every `return` statement in the function represents a unique, independent execution trace.
+Marid implements a **simple stack-based memory allocator** with the following
+properties:
+
+* Each SSA value and memory buffer is assigned a **unique, fixed stack range**.
+* Allocation sizes are derived from statically known types.
+* No reuse or lifetime analysis is performed.
+* The allocator is **deterministic** and **purely compile-time**.
+
+This pass does **not** modify the IR. Instead, it computes a memory layout
+and prints a human-readable report.
+
+### Example Output
+
+```text
+Stack size: 40 Bytes
+----
+Allocation:
+[0, 3]   <block argument> of type 'i32' at index: 0
+[4, 7]   %0 = arith.addi %arg0, %arg0 : i32
+[8, 39]  %alloc = memref.alloc() : memref<32xi8>
+----
+```
+
+This allocator serves as a foundation for future work, such as:
+
+* lifetime-aware stack reuse,
+* lowering `memref.alloc` to explicit stack offsets,
+* backend-specific code generation,
+* or formal reasoning about memory safety.
+
+---
+
+## CFG Properties After the Pipeline
+
+After running the full Marid pipeline, the resulting MLIR module satisfies:
+
+1. **No Loops**: The CFG is acyclic.
+2. **No Join Points**: Each block has at most one predecessor.
+3. **Path Isolation**: Each `return` corresponds to one execution trace.
+4. **Static Memory Layout**: All values have fixed, statically known locations.
+
+---
 
 ## Usage
 
 ```bash
 ./bin/marid-opt program.mlir
+```
+
+The tool prints:
+
+* diagnostics from the boundedness checker,
+* the memory allocation report,
+* followed by the (unchanged) transformed MLIR module.
 
 ```
