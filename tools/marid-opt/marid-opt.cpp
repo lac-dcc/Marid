@@ -7,15 +7,18 @@
 #include "marid/Analysis/ConstantBoundednessAnalysis.h"
 #include "marid/Passes/LoopExpansionPass.h"
 #include "marid/Passes/TreeificationPass.h"
+#include "marid/Passes/MemoryAllocationPass.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
@@ -46,9 +49,13 @@ int main(int argc, char **argv) {
 
   // Dialect registration
   DialectRegistry registry;
-  registry.insert<func::FuncDialect,
-                  arith::ArithDialect,
-                  scf::SCFDialect>();
+  registry.insert<
+    func::FuncDialect,
+    arith::ArithDialect,
+    scf::SCFDialect,
+    cf::ControlFlowDialect,
+    mlir::memref::MemRefDialect
+  >();
 
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
@@ -72,6 +79,7 @@ int main(int argc, char **argv) {
   pm.addPass(marid::createLoopExpansionPass());
   pm.addPass(marid::createTreeificationPass());
   pm.addPass(marid::createCheckConstantBoundednessPass());
+  pm.addPass(marid::createMemoryAllocationPass());
 
   if (failed(pm.run(*module)))
     return 1;
