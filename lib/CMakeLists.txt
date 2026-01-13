@@ -4,6 +4,7 @@ add_library(Marid STATIC
   Passes/LoopExpansionPass.cpp
   Passes/TreeificationPass.cpp
   Passes/MemoryAllocationPass.cpp
+  Passes/TreeScanMemoryAllocationPass.cpp
 )
 
 # Public headers live in include/
@@ -26,5 +27,6 @@ target_link_libraries(Marid
     MLIRFuncDialect
     MLIRSCFDialect
     MLIRControlFlowDialect
+    MLIRMemRefDialect
     LLVMSupport
 )

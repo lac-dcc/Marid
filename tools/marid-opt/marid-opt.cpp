@@ -1,6 +1,6 @@
 /**
- * @file runMemAllocPass.cpp
- * @brief Standalone tool to run ConstantBoundednessAnalysis on an MLIR file.
+ * @file marid-opt.cpp
+ * @brief Standalone driver for Marid passes.
  */
 
 #include "marid/Passes/CheckConstantBoundednessPass.h"
@@ -8,17 +8,19 @@
 #include "marid/Passes/LoopExpansionPass.h"
 #include "marid/Passes/TreeificationPass.h"
 #include "marid/Passes/MemoryAllocationPass.h"
+#include "marid/Passes/TreeScanMemoryAllocationPass.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
@@ -36,25 +38,33 @@ using namespace marid;
   std::exit(1);
 }
 
-/// Command-line options.
+/// Input file.
 static llvm::cl::opt<std::string> inputFilename(
     llvm::cl::Positional,
     llvm::cl::desc("<input mlir file>"),
     llvm::cl::init("-"));
 
+/// Memory allocation strategy.
+static llvm::cl::opt<std::string> memAllocStrategy(
+    "mem-alloc",
+    llvm::cl::desc("Memory allocation strategy"),
+    llvm::cl::value_desc("baseline|tree-scan"),
+    llvm::cl::init("baseline"));
+
 int main(int argc, char **argv) {
   llvm::InitLLVM initLLVM(argc, argv);
-  llvm::cl::ParseCommandLineOptions(argc, argv,
-      "Constant-boundedness checker for MLIR SCF programs\n");
+  llvm::cl::ParseCommandLineOptions(
+      argc, argv,
+      "Marid: constant-boundedness analysis and memory allocation\n");
 
   // Dialect registration
   DialectRegistry registry;
   registry.insert<
-    func::FuncDialect,
-    arith::ArithDialect,
-    scf::SCFDialect,
-    cf::ControlFlowDialect,
-    mlir::memref::MemRefDialect
+      func::FuncDialect,
+      arith::ArithDialect,
+      scf::SCFDialect,
+      cf::ControlFlowDialect,
+      memref::MemRefDialect
   >();
 
   MLIRContext context(registry);
@@ -74,19 +84,30 @@ int main(int argc, char **argv) {
   if (!module)
     die("Error: failed to parse MLIR module");
 
-  // Run ConstantBoundednessAnalysis
-  mlir::PassManager pm(&context);
-  pm.addPass(marid::createLoopExpansionPass());
-  pm.addPass(marid::createTreeificationPass());
-  pm.addPass(marid::createCheckConstantBoundednessPass());
-  pm.addPass(marid::createMemoryAllocationPass());
+  // Build pass pipeline
+  PassManager pm(&context);
 
+  pm.addPass(createCheckConstantBoundednessPass());
+  pm.addPass(createLoopExpansionPass());
+  pm.addPass(createTreeificationPass());
+
+  // Select memory allocator
+  if (memAllocStrategy == "baseline") {
+    pm.addPass(createMemoryAllocationPass());
+  } else if (memAllocStrategy == "tree-scan") {
+    pm.addNestedPass<func::FuncOp>(createTreeScanMemoryAllocationPass());
+  } else {
+    die("Unknown memory allocation strategy: " + memAllocStrategy);
+  }
+
+  // Run passes
   if (failed(pm.run(*module)))
     return 1;
 
+  // Print final module
+  llvm::outs() << "\n";
   module->print(llvm::outs());
   llvm::outs() << "\n";
 
   return 0;
-
 }
