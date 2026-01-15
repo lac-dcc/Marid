@@ -4,17 +4,9 @@
 
 Marid is an MLIR-based static analysis and transformation framework for reasoning
 about **boundedness**, **control flow structure**, and **memory allocation**
-in programs with statically predictable behavior.
+in programs with statically predictable behavior. This tool perform memory allocation via a tree-scan algorithm, that works as follows:
 
-## Features
-
-- Constant-boundedness analysis for SCF-based MLIR programs
-- Loop expansion for statically bounded iteration spaces
-- Treeification of structured control flow into a tree-shaped CFG
-- Simple stack-based memory allocation for constant-bounded programs
-- MLIR Analysis Framework integration
-- Checker pass with diagnostic support
-- Standalone driver tool (`marid-opt`)
+<img alt="Project Banner" src="assets/images/overview.png" width="95%" height="auto"/></br>
 
 ## Building
 
