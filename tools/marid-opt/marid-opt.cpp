@@ -9,6 +9,7 @@
 #include "marid/Passes/TreeificationPass.h"
 #include "marid/Passes/MemoryAllocationPass.h"
 #include "marid/Passes/TreeScanMemoryAllocationPass.h"
+#include "marid/Passes/TreeScanDefragMemoryAllocationPass.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -48,7 +49,7 @@ static llvm::cl::opt<std::string> inputFilename(
 static llvm::cl::opt<std::string> memAllocStrategy(
     "mem-alloc",
     llvm::cl::desc("Memory allocation strategy"),
-    llvm::cl::value_desc("baseline|tree-scan"),
+    llvm::cl::value_desc("baseline|tree-scan|tree-scan-defrag"),
     llvm::cl::init("baseline"));
 
 int main(int argc, char **argv) {
@@ -95,7 +96,11 @@ int main(int argc, char **argv) {
   if (memAllocStrategy == "baseline") {
     pm.addPass(createMemoryAllocationPass());
   } else if (memAllocStrategy == "tree-scan") {
-    pm.addNestedPass<func::FuncOp>(createTreeScanMemoryAllocationPass());
+    pm.addNestedPass<func::FuncOp>(
+        createTreeScanMemoryAllocationPass());
+  } else if (memAllocStrategy == "tree-scan-defrag") {
+    pm.addNestedPass<func::FuncOp>(
+        createTreeScanDefragMemoryAllocationPass());
   } else {
     die("Unknown memory allocation strategy: " + memAllocStrategy);
   }
