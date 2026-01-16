@@ -5,6 +5,8 @@ add_library(Marid STATIC
   Passes/TreeificationPass.cpp
   Passes/MemoryAllocationPass.cpp
   Passes/TreeScanMemoryAllocationPass.cpp
+  Passes/TreeScanMemoryAllocationPass.cpp
+  Passes/TreeScanDefragMemoryAllocationPass.cpp
 )
 
 # Public headers live in include/
