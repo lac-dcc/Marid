@@ -23,6 +23,9 @@ static void printValueName(Value v, llvm::raw_ostream &os) {
 /// Seen-set used during last-use discovery
 using SeenSet = llvm::SmallPtrSet<Value, 8>;
 
+/// Maximum size of the stack seen across all paths:
+size_t globalMaxStackSize = 0;
+
 /// Memory interval
 struct Interval {
   size_t offset;
@@ -31,7 +34,7 @@ struct Interval {
 
 /// Allocator state along one CFG path
 struct AllocatorState {
-  size_t nextOffset = 0;
+  size_t nextOffset = 0;      // current live footprint
   llvm::SmallVector<Interval, 8> freeList;
   llvm::DenseMap<Value, Interval> active;
 };
@@ -192,6 +195,8 @@ TreeScanDefragMemoryAllocationPass::allocateFromTop(
     AllocatorState &state, size_t size) {
   Interval result{state.nextOffset, size};
   state.nextOffset += size;
+  globalMaxStackSize =
+      std::max(globalMaxStackSize, state.nextOffset);
   return result;
 }
 
@@ -205,7 +210,9 @@ TreeScanDefragMemoryAllocationPass::allocateInterval(
   }
 
   // Case 2: stack must grow — should we defragment?
-  if (totalFreeMemory(state) > 0) {
+  if (totalFreeMemory(state) > 0 &&
+    state.nextOffset + size > globalMaxStackSize) {
+    llvm::outs() << "DEBUG: Invoking defrag with global max = " << globalMaxStackSize << " vs " << (state.nextOffset + size) << "\n";
     defragment(state);
     // After defrag, we can allocate from top!
   }
@@ -319,6 +326,7 @@ TreeScanDefragMemoryAllocationPass::printAllocations(func::FuncOp func) {
   }
 
   llvm::outs() << "Stack size: " << maxOffset << " Bytes\n";
+  assert(globalMaxStackSize == maxOffset);
 }
 
 void
