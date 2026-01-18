@@ -168,6 +168,17 @@ TreeScanMemoryAllocationPass::allocateFromBlock(Block *block,
   }
 
   for (Operation &op : *block) {
+    // Free last uses
+    for (Value v : op.getOperands()) {
+      if (isLastUse(v, &op)) {
+        auto it = state.active.find(v);
+        if (it != state.active.end()) {
+          freeInterval(state, it->second);
+          state.active.erase(it);
+        }
+      }
+    }
+
     // Allocate results
     for (Value res : op.getResults()) {
       size_t size = getValueSize(res);
@@ -177,16 +188,11 @@ TreeScanMemoryAllocationPass::allocateFromBlock(Block *block,
       Interval interval = allocateInterval(state, size);
       state.active[res] = interval;
       finalAllocations.try_emplace(res, interval);
-    }
 
-    // Free last uses
-    for (Value v : op.getOperands()) {
-      if (isLastUse(v, &op)) {
-        auto it = state.active.find(v);
-        if (it != state.active.end()) {
-          freeInterval(state, it->second);
-          state.active.erase(it);
-        }
+      // Immediately free values that have no uses
+      if (res.use_empty()) {
+        freeInterval(state, i);
+        state.active.erase(res);
       }
     }
   }

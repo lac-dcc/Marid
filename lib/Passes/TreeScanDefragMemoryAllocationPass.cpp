@@ -199,16 +199,21 @@ Interval
 TreeScanDefragMemoryAllocationPass::allocateInterval(
     AllocatorState &state, size_t size) {
 
-  if (hasContiguousFree(state, size))
-    return allocateFromFreeList(state, size);
-
-  if (totalFreeMemory(state) >= size) {
-    defragment(state);
+  // Case 1: fast path
+  if (hasContiguousFree(state, size)) {
     return allocateFromFreeList(state, size);
   }
 
+  // Case 2: stack must grow — should we defragment?
+  if (totalFreeMemory(state) > 0) {
+    defragment(state);
+    // After defrag, we can allocate from top!
+  }
+
+  // Case 3: unavoidable growth
   return allocateFromTop(state, size);
 }
+
 
 void
 TreeScanDefragMemoryAllocationPass::freeInterval(
@@ -241,11 +246,8 @@ TreeScanDefragMemoryAllocationPass::defragment(AllocatorState &state) {
     newOffset += interval.size;
   }
 
+  state.nextOffset = newOffset;
   state.freeList.clear();
-  if (newOffset < state.nextOffset) {
-    state.freeList.push_back(
-        Interval{newOffset, state.nextOffset - newOffset});
-  }
 }
 
 /* ========================= TOP-DOWN ALLOCATION ========================= */
@@ -264,15 +266,7 @@ TreeScanDefragMemoryAllocationPass::allocateFromBlock(
   }
 
   for (Operation &op : *block) {
-    for (Value res : op.getResults()) {
-      size_t size = getValueSize(res);
-      if (size == 0)
-        continue;
-      Interval i = allocateInterval(state, size);
-      state.active[res] = i;
-      finalAllocations.try_emplace(res, i);
-    }
-
+    // Free last uses
     for (Value v : op.getOperands()) {
       if (isLastUse(v, &op)) {
         auto it = state.active.find(v);
@@ -282,6 +276,24 @@ TreeScanDefragMemoryAllocationPass::allocateFromBlock(
         }
       }
     }
+
+    // Allocate results
+    for (Value res : op.getResults()) {
+      size_t size = getValueSize(res);
+      if (size == 0)
+        continue;
+
+      Interval i = allocateInterval(state, size);
+      state.active[res] = i;
+      finalAllocations.try_emplace(res, i);
+
+      // Immediately free values that have no uses
+      if (res.use_empty()) {
+        freeInterval(state, i);
+        state.active.erase(res);
+      }
+    } 
+
   }
 
   for (Block *succ : block->getSuccessors())
