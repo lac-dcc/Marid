@@ -191,7 +191,7 @@ TreeScanMemoryAllocationPass::allocateFromBlock(Block *block,
 
       // Immediately free values that have no uses
       if (res.use_empty()) {
-        freeInterval(state, i);
+        freeInterval(state, interval);
         state.active.erase(res);
       }
     }
