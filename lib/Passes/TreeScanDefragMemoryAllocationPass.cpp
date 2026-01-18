@@ -221,12 +221,38 @@ TreeScanDefragMemoryAllocationPass::allocateInterval(
   return allocateFromTop(state, size);
 }
 
-
 void
 TreeScanDefragMemoryAllocationPass::freeInterval(
     AllocatorState &state, const Interval &interval) {
+
+  size_t intervalEnd = interval.offset + interval.size;
+
+  // Case 1: freeing the top of the stack
+  if (intervalEnd == state.nextOffset) {
+    state.nextOffset = interval.offset;
+
+    // Cascade: see if this exposes another free-at-top interval
+    bool shrunk;
+    do {
+      shrunk = false;
+      for (auto it = state.freeList.begin();
+           it != state.freeList.end(); ++it) {
+        if (it->offset + it->size == state.nextOffset) {
+          state.nextOffset = it->offset;
+          state.freeList.erase(it);
+          shrunk = true;
+          break;
+        }
+      }
+    } while (shrunk);
+
+    return;
+  }
+
+  // Case 2: interior hole
   state.freeList.push_back(interval);
 }
+
 
 /* ========================= DEFRAGMENTATION ========================= */
 
