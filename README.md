@@ -230,17 +230,42 @@ def allocate_interval(state, size):
 
 ### Defragmentation Pseudo-code
 
+At the point where defragmentation is invoked, we know:
+* A new value of size size is about to be allocated.
+* Some currently active values have their last use at this program point.
+* Those values will be freed immediately after the allocation, so:
+  * They should not be moved down during defragmentation; and
+  * They should be placed at the top of the compacted memory, so that the new allocation can overwrite them.
+
 ```python
-def defragment(state):
-    # Sort active intervals by offset
-    active = sort_by_offset(state.active)
+def defragment(state, last_use_set):
+    movable   = []
+    protected = []
+
+    for (value, interval) in state.active:
+        if value in last_use_set:
+            protected.append((value, interval))
+        else:
+            movable.append((value, interval))
+
+    movable   = sort_by_offset(movable)
+    protected = sort_by_offset(protected)
 
     new_offset = 0
-    for (value, interval) in active:
-        if interval.offset != new_offset:
-            move_memory(value, new_offset)
-        interval.offset = new_offset
-        new_offset += interval.size
+
+    # Pack movable values first
+    for (v, i) in movable:
+        if i.offset != new_offset:
+            move_memory(v, new_offset)
+        i.offset = new_offset
+        new_offset += i.size
+
+    # Place protected (last-use) values on top
+    for (v, i) in protected:
+        if i.offset != new_offset:
+            move_memory(v, new_offset)
+        i.offset = new_offset
+        new_offset += i.size
 
     state.next_offset = new_offset
     state.free_list.clear()
