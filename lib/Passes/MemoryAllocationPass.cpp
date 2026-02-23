@@ -8,6 +8,7 @@
 #include "mlir/Pass/Pass.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/Support/raw_ostream.h"
+#include "mlir/IR/Diagnostics.h"
 
 using namespace mlir;
 
@@ -82,19 +83,26 @@ struct MemoryAllocationPass
           << value << " -> ["
           << alloc.offset << ", "
           << (alloc.offset + alloc.size - 1)
-          << "]\n";
+	  << "]\n";
     }
   }
-
   static uint64_t getTypeSizeInBytes(Type ty) {
-    if (auto intTy = dyn_cast<IntegerType>(ty))
-      return std::max<uint64_t>(1, intTy.getWidth() / 8);
+	  if (auto intTy = dyn_cast<IntegerType>(ty))
+		  return std::max<uint64_t>(1, intTy.getWidth() / 8);
 
-    if (auto floatTy = dyn_cast<FloatType>(ty))
-      return floatTy.getWidth() / 8;
+	  if (auto floatTy = dyn_cast<FloatType>(ty))
+		  return floatTy.getWidth() / 8;
 
-    llvm::report_fatal_error("unsupported type in allocator");
+	  std::string msg;
+	  llvm::raw_string_ostream os(msg);
+
+	  os << "Damit! unsupported type in allocator: " << ty << "\n";
+
+	  os.flush();
+
+	  llvm::report_fatal_error(llvm::StringRef(msg));
   }
+
 
   StringRef getArgument() const override {
     return "marid-alloc";

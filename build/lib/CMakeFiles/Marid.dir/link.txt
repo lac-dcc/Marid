@@ -1,0 +1,2 @@
+/usr/bin/ar qc libMarid.a CMakeFiles/Marid.dir/Analysis/ConstantBoundednessAnalysis.cpp.o CMakeFiles/Marid.dir/Passes/CheckConstantBoundednessPass.cpp.o CMakeFiles/Marid.dir/Passes/LoopExpansionPass.cpp.o CMakeFiles/Marid.dir/Passes/TreeificationPass.cpp.o CMakeFiles/Marid.dir/Passes/MemoryAllocationPass.cpp.o CMakeFiles/Marid.dir/Passes/TreeScanMemoryAllocationPass.cpp.o CMakeFiles/Marid.dir/Passes/TreeScanDefragMemoryAllocationPass.cpp.o
+/usr/bin/ranlib libMarid.a

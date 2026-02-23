@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/silva/repos/viniciusfdasilva/Marid/build/cmake_install.cmake",
+		"/home/silva/repos/viniciusfdasilva/Marid/build/lib/cmake_install.cmake",
+		"/home/silva/repos/viniciusfdasilva/Marid/build/tools/cmake_install.cmake",
+		"/home/silva/repos/viniciusfdasilva/Marid/build/tools/marid-opt/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
