@@ -93,6 +93,9 @@ struct MemoryAllocationPass
 	  if (auto floatTy = dyn_cast<FloatType>(ty))
 		  return floatTy.getWidth() / 8;
 
+    if (auto indexTy = dyn_cast<IndexType>(ty))
+      return 8;
+      
 	  std::string msg;
 	  llvm::raw_string_ostream os(msg);
 
