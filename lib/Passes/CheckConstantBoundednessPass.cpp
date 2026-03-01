@@ -30,7 +30,7 @@ struct CheckConstantBoundednessPass
       return;
     }
 
-    llvm::outs() << "Program is constant-bounded.\n";
+    //llvm::outs() << "Program is constant-bounded.\n";
   }
 };
 

@@ -75,16 +75,16 @@ struct MemoryAllocationPass
     });
 
     // --- Report ---
-    llvm::outs() << "Stack size: " << currentOffset << " Bytes\n";
-    llvm::outs() << "----\nAllocation:\n";
+    llvm::outs() << currentOffset;
+    //llvm::outs() << "----\nAllocation:\n";
 
-    for (auto &[value, alloc] : allocations) {
-      llvm::outs()
-          << value << " -> ["
-          << alloc.offset << ", "
-          << (alloc.offset + alloc.size - 1)
-	  << "]\n";
-    }
+//    for (auto &[value, alloc] : allocations) {
+//      llvm::outs()
+ //         << value << " -> ["
+  //        << alloc.offset << ", "
+   //       << (alloc.offset + alloc.size - 1)
+//	  << "]\n";
+//  }
   }
   static uint64_t getTypeSizeInBytes(Type ty) {
 	  if (auto intTy = dyn_cast<IntegerType>(ty))
@@ -93,9 +93,9 @@ struct MemoryAllocationPass
 	  if (auto floatTy = dyn_cast<FloatType>(ty))
 		  return floatTy.getWidth() / 8;
 
-    if (auto indexTy = dyn_cast<IndexType>(ty))
-      return 8;
-      
+    	if (auto indexTy = dyn_cast<IndexType>(ty))
+      		return 8;
+
 	  std::string msg;
 	  llvm::raw_string_ostream os(msg);
 

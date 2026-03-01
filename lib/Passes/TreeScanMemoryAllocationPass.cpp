@@ -224,19 +224,19 @@ void TreeScanMemoryAllocationPass::printLastUses(func::FuncOp func) {
 void TreeScanMemoryAllocationPass::printAllocations(func::FuncOp func) {
   size_t maxOffset = 0;
 
-  llvm::outs() << "\nAllocation:\n";
+  //llvm::outs() << "\nAllocation:\n";
   for (auto &entry : finalAllocations) {
     auto &interval = entry.second;
     maxOffset = std::max(maxOffset, interval.offset + interval.size);
 
-    llvm::outs() << "["
-                 << interval.offset << ", "
-                 << (interval.offset + interval.size - 1) << "] ";
-    printValueName(entry.first, llvm::outs());
-    llvm::outs() << "\n";
+    //llvm::outs() << "["
+      //           << interval.offset << ", "
+      //           << (interval.offset + interval.size - 1) << "] ";
+    //printValueName(entry.first, llvm::outs());
+    //llvm::outs() << "\n";
   }
 
-  llvm::outs() << "Stack size: " << maxOffset << " Bytes\n";
+  llvm::outs() << maxOffset;
 }
 
 /* ========================= PASS ENTRY ========================= */
@@ -254,7 +254,7 @@ void TreeScanMemoryAllocationPass::runOnOperation() {
   AllocatorState initialState;
   allocateFromBlock(&entry, initialState);
 
-  printLastUses(func);
+  //printLastUses(func);
   printAllocations(func);
 }
 

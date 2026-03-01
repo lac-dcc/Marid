@@ -210,12 +210,12 @@ TreeScanDefragMemoryAllocationPass::allocateInterval(
   }
 
   // Case 2: stack must grow — should we defragment?
-  if (totalFreeMemory(state) > 0 &&
-    state.nextOffset + size > globalMaxStackSize) {
-    llvm::outs() << "DEBUG: Invoking defrag with global max = " << globalMaxStackSize << " vs " << (state.nextOffset + size) << "\n";
-    defragment(state);
+ // if (totalFreeMemory(state) > 0 &&
+  //  state.nextOffset + size > globalMaxStackSize) {
+  //  llvm::outs() << "DEBUG: Invoking defrag with global max = " << globalMaxStackSize << " vs " << (state.nextOffset + size) << "\n";
+  //  defragment(state);
     // After defrag, we can allocate from top!
-  }
+  //}
 
   // Case 3: unavoidable growth
   return allocateFromTop(state, size);
@@ -339,19 +339,19 @@ void
 TreeScanDefragMemoryAllocationPass::printAllocations(func::FuncOp func) {
   size_t maxOffset = 0;
 
-  llvm::outs() << "\nAllocation:\n";
+  //llvm::outs() << "\nAllocation:\n";
   for (auto &kv : finalAllocations) {
-    const Interval &i = kv.second;
-    maxOffset = std::max(maxOffset, i.offset + i.size);
+  	const Interval &i = kv.second;
+    	maxOffset = std::max(maxOffset, i.offset + i.size);
 
-    llvm::outs() << "["
-                 << i.offset << ", "
-                 << (i.offset + i.size - 1) << "] ";
-    printValueName(kv.first, llvm::outs());
-    llvm::outs() << "\n";
+    //llvm::outs() << "["
+    //             << i.offset << ", "
+    //             << (i.offset + i.size - 1) << "] ";
+    //printValueName(kv.first, llvm::outs());
+    //llvm::outs() << "\n";
   }
 
-  llvm::outs() << "Stack size: " << maxOffset << " Bytes\n";
+  llvm::outs() << maxOffset;
   assert(globalMaxStackSize == maxOffset);
 }
 
@@ -381,7 +381,7 @@ TreeScanDefragMemoryAllocationPass::runOnOperation() {
   allocateFromBlock(&entry, initial);
 
   printAllocations(func);
-  printDefragStats(func);
+  //printDefragStats(func);
 }
 
 } // namespace

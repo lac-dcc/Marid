@@ -110,9 +110,9 @@ int main(int argc, char **argv) {
     return 1;
 
   // Print final module
-  llvm::outs() << "\n";
-  module->print(llvm::outs());
-  llvm::outs() << "\n";
+ //  llvm::outs() << "\n";
+//  module->print(llvm::outs());
+//  llvm::outs() << "\n";
 
   return 0;
 }
