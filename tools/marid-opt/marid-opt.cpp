@@ -87,6 +87,7 @@ int main(int argc, char **argv) {
 
   // Build pass pipeline
   PassManager pm(&context);
+  pm.enableTiming();
 
   pm.addPass(createCheckConstantBoundednessPass());
   pm.addPass(createLoopExpansionPass());
