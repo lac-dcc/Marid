@@ -45,6 +45,12 @@ static llvm::cl::opt<std::string> inputFilename(
     llvm::cl::desc("<input mlir file>"),
     llvm::cl::init("-"));
 
+/// Print the final module.
+static llvm::cl::opt<bool> printFinalModule(
+    "print-module",
+    llvm::cl::desc("Print the final MLIR module after running passes"),
+    llvm::cl::init(false));
+
 /// Memory allocation strategy.
 static llvm::cl::opt<std::string> memAllocStrategy(
     "mem-alloc",
@@ -90,8 +96,15 @@ int main(int argc, char **argv) {
   pm.enableTiming();
 
   pm.addPass(createCheckConstantBoundednessPass());
-  pm.addPass(createLoopExpansionPass());
-  pm.addPass(createTreeificationPass());
+
+  bool useTreePipeline =
+    memAllocStrategy == "tree-scan" ||
+    memAllocStrategy == "tree-scan-defrag";
+
+  if (useTreePipeline) {
+    pm.addPass(createLoopExpansionPass());
+    pm.addPass(createTreeificationPass());
+  }
 
   // Select memory allocator
   if (memAllocStrategy == "baseline") {
@@ -111,9 +124,11 @@ int main(int argc, char **argv) {
     return 1;
 
   // Print final module
-  llvm::outs() << "\n";
-  module->print(llvm::outs());
-  llvm::outs() << "\n";
+  if (printFinalModule) {
+    llvm::outs() << "\n";
+    module->print(llvm::outs());
+    llvm::outs() << "\n";
+  }
 
   return 0;
 }
