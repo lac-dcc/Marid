@@ -20,6 +20,10 @@ static void printValueName(Value v, llvm::raw_ostream &os) {
   v.printAsOperand(os, OpPrintingFlags().useLocalScope());
 }
 
+int opCount = 0;
+int varCount = 0;
+
+
 /// Seen-set used during last-use discovery
 using SeenSet = llvm::SmallPtrSet<Value, 8>;
 
@@ -89,12 +93,15 @@ private:
 
   void printAllocations(func::FuncOp func);
   void printDefragStats(func::FuncOp func);
+  void printSSAVariables(func::FuncOp func);
+  void printInstructions(func::FuncOp func);
 
 public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(
       TreeScanDefragMemoryAllocationPass)
 
   void runOnOperation() override;
+  
 
   StringRef getArgument() const final {
     return "marid-tree-scan-defrag-mem-alloc";
@@ -333,6 +340,8 @@ TreeScanDefragMemoryAllocationPass::allocateFromBlock(
     allocateFromBlock(succ, state);
 }
 
+
+
 /* ========================= REPORTING ========================= */
 
 void
@@ -353,6 +362,39 @@ TreeScanDefragMemoryAllocationPass::printAllocations(func::FuncOp func) {
 
   llvm::outs() << maxOffset;
   assert(globalMaxStackSize == maxOffset);
+}
+
+void
+TreeScanDefragMemoryAllocationPass::printSSAVariables(func::FuncOp func)
+{
+  int varCount = 0;
+  
+  mlir::ModuleOp moduleOp = func->getParentOfType<mlir::ModuleOp>();
+
+  moduleOp.walk([&](mlir::Operation *op) {
+      varCount += op->getNumResults();
+      
+      for (mlir::Region &region : op->getRegions()) {
+          for (mlir::Block &block : region.getBlocks()) {
+              varCount += block.getNumArguments();
+          }
+      }
+  });
+
+  llvm::outs() << "\nVariables (SSA): " << varCount << "\n";
+}
+
+void
+TreeScanDefragMemoryAllocationPass::printInstructions(func::FuncOp func)
+{
+  int opCount = 0;
+  mlir::ModuleOp moduleOp = func->getParentOfType<mlir::ModuleOp>();
+
+  moduleOp.walk([&](mlir::Operation *op){
+    opCount++;
+  });
+
+  llvm::outs() << "Instructions: " << opCount << "\n";
 }
 
 void
@@ -382,6 +424,8 @@ TreeScanDefragMemoryAllocationPass::runOnOperation() {
 
   printAllocations(func);
   //printDefragStats(func);
+  printSSAVariables(func);
+  printInstructions(func);
 }
 
 } // namespace

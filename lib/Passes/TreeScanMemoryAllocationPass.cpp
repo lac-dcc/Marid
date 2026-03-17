@@ -62,6 +62,8 @@ private:
 
   void printLastUses(func::FuncOp func);
   void printAllocations(func::FuncOp func);
+  void printSSAVariables(func::FuncOp func);
+  void printInstructions(func::FuncOp func);
 
 public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(
@@ -203,6 +205,39 @@ TreeScanMemoryAllocationPass::allocateFromBlock(Block *block,
   }
 }
 
+void
+TreeScanMemoryAllocationPass::printSSAVariables(func::FuncOp func)
+{
+  int varCount = 0;
+  
+  mlir::ModuleOp moduleOp = func->getParentOfType<mlir::ModuleOp>();
+
+  moduleOp.walk([&](mlir::Operation *op) {
+      varCount += op->getNumResults();
+      
+      for (mlir::Region &region : op->getRegions()) {
+          for (mlir::Block &block : region.getBlocks()) {
+              varCount += block.getNumArguments();
+          }
+      }
+  });
+
+  llvm::outs() << "\nVariables (SSA): " << varCount << "\n";
+}
+
+void
+TreeScanMemoryAllocationPass::printInstructions(func::FuncOp func)
+{
+  int opCount = 0;
+  mlir::ModuleOp moduleOp = func->getParentOfType<mlir::ModuleOp>();
+
+  moduleOp.walk([&](mlir::Operation *op){
+    opCount++;
+  });
+
+  llvm::outs() << "Instructions: " << opCount << "\n";
+}
+
 /* ========================= REPORTING ========================= */
 
 void TreeScanMemoryAllocationPass::printLastUses(func::FuncOp func) {
@@ -256,6 +291,8 @@ void TreeScanMemoryAllocationPass::runOnOperation() {
 
   //printLastUses(func);
   printAllocations(func);
+  printSSAVariables(func);
+  printInstructions(func);
 }
 
 } // namespace
