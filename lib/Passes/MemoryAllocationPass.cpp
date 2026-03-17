@@ -76,6 +76,7 @@ struct MemoryAllocationPass
 
     // --- Report ---
     llvm::outs() << currentOffset;
+
     //llvm::outs() << "----\nAllocation:\n";
 
 //    for (auto &[value, alloc] : allocations) {
@@ -85,6 +86,24 @@ struct MemoryAllocationPass
    //       << (alloc.offset + alloc.size - 1)
 //	  << "]\n";
 //  }
+
+    int opCount = 0;
+    int varCount = 0;
+    // --- Operations ---
+    module.walk([&](Operation *op) {
+      // Scalars (arith ops, etc.)
+      opCount++;
+      varCount += op->getNumResults();
+
+      for (mlir::Region &region : op->getRegions()) {
+        for (mlir::Block &block : region.getBlocks()) {
+            varCount += block.getNumArguments();
+        }
+      }
+
+    });
+    llvm::outs() << "\nVariables (SSA): " << varCount << "\n";
+    llvm::outs() << "Instructions: " << opCount << "\n";
   }
   static uint64_t getTypeSizeInBytes(Type ty) {
 	  if (auto intTy = dyn_cast<IntegerType>(ty))
