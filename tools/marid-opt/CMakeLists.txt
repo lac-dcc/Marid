@@ -16,11 +16,12 @@ target_link_libraries(marid-opt
     MLIRPass
     MLIRParser
     MLIRSupport
-
+    
     # Dialects you USE
     MLIRFuncDialect
     MLIRArithDialect
     MLIRSCFDialect
+    MLIRLLVMDialect
 
     # LLVM
     LLVMSupport

@@ -16,6 +16,7 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Diagnostics.h"
@@ -71,7 +72,8 @@ int main(int argc, char **argv) {
       arith::ArithDialect,
       scf::SCFDialect,
       cf::ControlFlowDialect,
-      memref::MemRefDialect
+      memref::MemRefDialect,
+      mlir::LLVM::LLVMDialect
   >();
 
   MLIRContext context(registry);
